@@ -4,6 +4,7 @@ import com.doculens.pdfbox.model.AnalysisResponse;
 import com.doculens.pdfbox.model.PageData;
 import com.doculens.pdfbox.model.Paragraph;
 import com.doculens.pdfbox.model.WordBoundingBox;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentInformation;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -89,7 +90,7 @@ public class PdfAnalysisService {
         response.setFileName(file.getOriginalFilename());
 
         try (InputStream inputStream = file.getInputStream();
-             PDDocument document = PDDocument.load(inputStream)) {
+             PDDocument document = Loader.loadPDF(inputStream.readAllBytes())) {
 
             int totalPages = document.getNumberOfPages();
             response.setTotalPages(totalPages);

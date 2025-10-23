@@ -33,8 +33,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p><b>Test Data:</b></p>
  * <p>Tests use sample PDFs located in the {@code samples/} directory:</p>
  * <ul>
- *   <li>{@code text-sample.pdf} - Regular text-based PDF</li>
- *   <li>{@code scanned-sample.pdf} - Scanned document image</li>
+ *   <li>{@code sample_text_pdf1.pdf} - Regular text-based PDF</li>
+ *   <li>{@code sample_scanned_pdf1.pdf} - Scanned document image</li>
  * </ul>
  *
  * @author PDFBox Service
@@ -48,8 +48,8 @@ class PdfAnalysisServiceTest {
     private PdfAnalysisService pdfAnalysisService;
 
     private static final String SAMPLES_DIR = "samples";
-    private static final String TEXT_PDF = "text-sample.pdf";
-    private static final String SCANNED_PDF = "scanned-sample.pdf";
+    private static final String TEXT_PDF = "sample_text_pdf1.pdf";
+    private static final String SCANNED_PDF = "sample_scanned_pdf1.pdf";
 
     /**
      * Setup method run before each test.
