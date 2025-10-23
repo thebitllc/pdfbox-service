@@ -121,12 +121,8 @@ public class PdfAnalysisService {
                 pageData.setParagraphs(paragraphs);
                 logger.debug("Grouped words into {} paragraphs on page {}", paragraphs.size(), pageNum);
 
-                // Step 3: Calculate full page text content
-                StringBuilder pageText = new StringBuilder();
-                for (WordBoundingBox word : words) {
-                    pageText.append(word.getText()).append(" ");
-                }
-                String textContent = pageText.toString().trim();
+                // Step 3: Calculate full page text content with proper spacing
+                String textContent = buildTextWithSpacing(words);
                 pageData.setTextContent(textContent);
                 totalTextLength += textContent.length();
 
@@ -159,6 +155,95 @@ public class PdfAnalysisService {
         }
 
         return response;
+    }
+
+    /**
+     * Builds text content from a list of words with proper spacing based on
+     * horizontal gaps between words.
+     *
+     * <p>This method analyzes the spatial relationship between consecutive words
+     * and inserts appropriate spacing (no space, single space, or multiple spaces)
+     * based on the horizontal gap between word bounding boxes.</p>
+     *
+     * @param words list of words with bounding boxes
+     * @return text content with proper spacing
+     */
+    private String buildTextWithSpacing(List<WordBoundingBox> words) {
+        if (words.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < words.size(); i++) {
+            WordBoundingBox currentWord = words.get(i);
+            sb.append(currentWord.getText());
+
+            if (i < words.size() - 1) {
+                WordBoundingBox nextWord = words.get(i + 1);
+
+                // Calculate spacing based on horizontal gap between words
+                String spacing = calculateSpacing(currentWord, nextWord);
+                sb.append(spacing);
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Calculates the appropriate spacing between two consecutive words based on
+     * their bounding box positions.
+     *
+     * @param currentWord the current word
+     * @param nextWord the next word
+     * @return the spacing string (empty, single space, or multiple spaces)
+     */
+    private String calculateSpacing(WordBoundingBox currentWord, WordBoundingBox nextWord) {
+        WordBoundingBox.BoundingBox currentBox = currentWord.getBoundingBox();
+        WordBoundingBox.BoundingBox nextBox = nextWord.getBoundingBox();
+
+        if (currentBox == null || nextBox == null) {
+            return " "; // Default to single space if no bounding box info
+        }
+
+        // Check if words are on different lines (significant Y difference)
+        float currentY = currentBox.getY();
+        float nextY = nextBox.getY();
+        float yDiff = Math.abs(currentY - nextY);
+
+        // If Y difference is significant (> half line height), add newline
+        if (yDiff > currentBox.getHeight() * 0.5) {
+            return "\n";
+        }
+
+        // Words are on the same line - calculate horizontal gap
+        float currentEndX = currentBox.getX() + currentBox.getWidth();
+        float nextStartX = nextBox.getX();
+        float gap = nextStartX - currentEndX;
+
+        // Estimate average character width from current word
+        float avgCharWidth = currentBox.getWidth() / Math.max(1, currentWord.getText().length());
+
+        // Determine spacing based on gap size
+        if (gap < 0) {
+            // Overlapping or touching words - no space
+            return "";
+        } else if (gap < avgCharWidth * 0.3) {
+            // Very small gap - no space (words are very close)
+            return "";
+        } else if (gap < avgCharWidth * 2.0) {
+            // Normal gap - single space
+            return " ";
+        } else if (gap < avgCharWidth * 4.0) {
+            // Larger gap - two spaces
+            return "  ";
+        } else {
+            // Very large gap - treat as tab or multiple spaces
+            // Calculate approximate number of spaces based on gap
+            int numSpaces = Math.min(10, (int) Math.round(gap / avgCharWidth));
+            return " ".repeat(Math.max(2, numSpaces));
+        }
     }
 
     /**
