@@ -117,7 +117,25 @@ public class ParagraphExtractor {
         paragraphs = groupLinesIntoParagraphs(lines, paragraphBreakThreshold);
         logger.debug("Created {} paragraphs", paragraphs.size());
 
-        return paragraphs;
+        // Step 5: Filter out empty or whitespace-only paragraphs
+        List<Paragraph> filteredParagraphs = new ArrayList<>();
+        for (Paragraph paragraph : paragraphs) {
+            // Skip paragraphs with no words
+            if (paragraph.getWords() == null || paragraph.getWords().isEmpty()) {
+                continue;
+            }
+
+            // Skip paragraphs where text is empty or just whitespace
+            String text = paragraph.getText();
+            if (text == null || text.trim().isEmpty() || text.isBlank()) {
+                continue;
+            }
+
+            filteredParagraphs.add(paragraph);
+        }
+
+        logger.debug("Filtered to {} non-empty paragraphs", filteredParagraphs.size());
+        return filteredParagraphs;
     }
 
     /**

@@ -66,6 +66,12 @@ public class WordBoundingBoxExtractor extends PDFTextStripper {
     private float pageHeight;
 
     /**
+     * The previous character position, tracked across multiple writeString() calls.
+     * Used for position-based word boundary detection.
+     */
+    private TextPosition previousPosition;
+
+    /**
      * Constructs a new WordBoundingBoxExtractor.
      *
      * @throws IOException if there's an error initializing the PDFTextStripper
@@ -74,6 +80,7 @@ public class WordBoundingBoxExtractor extends PDFTextStripper {
         super();
         this.words = new ArrayList<>();
         this.wordCharacters = new ArrayList<>();
+        this.previousPosition = null;
     }
 
     /**
@@ -98,6 +105,7 @@ public class WordBoundingBoxExtractor extends PDFTextStripper {
         // Initialize/reset state for this page
         this.words = new ArrayList<>();
         this.wordCharacters = new ArrayList<>();
+        this.previousPosition = null;
 
         // Get page dimensions for coordinate conversion
         // PDFBox uses 0-indexed pages, but our API uses 1-indexed
@@ -124,14 +132,17 @@ public class WordBoundingBoxExtractor extends PDFTextStripper {
      *
      * <p>This method is automatically invoked by PDFBox during text extraction.
      * It receives text strings along with position information for each character.
-     * We use this to accumulate characters into words, breaking on whitespace.</p>
+     * We use this to accumulate characters into words, breaking on word separators.</p>
      *
      * <p><b>Algorithm:</b></p>
      * <ul>
      *   <li>Iterate through each character position</li>
-     *   <li>If character is whitespace → process accumulated word</li>
-     *   <li>If character is not whitespace → add to current word buffer</li>
+     *   <li>If character matches word separator → process accumulated word</li>
+     *   <li>If character is not separator → add to current word buffer</li>
      * </ul>
+     *
+     * <p>Uses {@link #getWordSeparator()} to properly detect word boundaries
+     * as defined by PDFBox, which handles various whitespace and separator characters.</p>
      *
      * @param text          the text string (may contain multiple characters)
      * @param textPositions position information for each character in the text
@@ -139,18 +150,82 @@ public class WordBoundingBoxExtractor extends PDFTextStripper {
      */
     @Override
     protected void writeString(String text, List<TextPosition> textPositions) throws IOException {
+        String wordSeparator = getWordSeparator();
+
         for (TextPosition position : textPositions) {
             String character = position.getUnicode();
 
-            // Check if this character is a word separator (whitespace, newline, etc.)
-            if (character.matches("\\s+") || character.isEmpty()) {
-                // Whitespace found - process the accumulated word
-                processWord();
+            // Check if this character is the word separator
+            if (wordSeparator.equals(character)) {
+                // Word separator found - process the accumulated word
+                if (!wordCharacters.isEmpty()) {
+                    processWord();
+                }
+                // Reset previous position after a space
+                this.previousPosition = null;
             } else {
+                // Check for word boundary based on horizontal spacing
+                // If there's a significant gap between characters, treat it as a word boundary
+                if (this.previousPosition != null && shouldSplitWord(this.previousPosition, position)) {
+                    // Large gap detected - process current word before starting new one
+                    if (!wordCharacters.isEmpty()) {
+                        processWord();
+                    }
+                }
+
                 // Regular character - add to current word buffer
                 wordCharacters.add(position);
+                // Update previous position for next character (persists across writeString calls)
+                this.previousPosition = position;
             }
         }
+    }
+
+    /**
+     * Determines if there should be a word boundary between two consecutive characters
+     * based on their horizontal spacing.
+     *
+     * <p>This method uses the font's space width to determine if a gap between
+     * characters is large enough to constitute a word boundary. This is more reliable
+     * than using individual character widths, which can vary significantly.</p>
+     *
+     * @param previous the previous character position
+     * @param current the current character position
+     * @return true if a word boundary should be inserted
+     */
+    private boolean shouldSplitWord(TextPosition previous, TextPosition current) {
+        // Check for line break - if Y position changes significantly, it's a new line
+        float previousY = previous.getYDirAdj();
+        float currentY = current.getYDirAdj();
+        float yDifference = Math.abs(currentY - previousY);
+
+        // If vertical distance is more than half the character height, it's a line break
+        float lineThreshold = previous.getHeightDir() * 0.5f;
+        if (yDifference > lineThreshold) {
+            return true; // Different lines = word boundary
+        }
+
+        // Same line - check horizontal spacing
+        float previousEndX = previous.getXDirAdj() + previous.getWidthDirAdj();
+        float currentStartX = current.getXDirAdj();
+        float gap = currentStartX - previousEndX;
+
+        // Get the space width from the font
+        // This is more reliable than using individual character widths
+        float spaceWidth;
+        try {
+            spaceWidth = previous.getWidthOfSpace();
+        } catch (Exception e) {
+            // Fallback: use average of previous and current character widths
+            spaceWidth = (previous.getWidthDirAdj() + current.getWidthDirAdj()) / 2.0f;
+        }
+
+        // If the gap is more than a fraction of the space width, consider it a word boundary
+        // Using 0.5 as threshold means gap must be at least half a space width
+        // This can be tuned: lower value = more splitting, higher value = less splitting
+        float threshold = spaceWidth * 0.5f;
+
+        return gap > threshold;
     }
 
     /**
@@ -187,11 +262,16 @@ public class WordBoundingBoxExtractor extends PDFTextStripper {
 
         // Skip empty words or pure whitespace
         // This can happen with special characters or formatting codes
-        String word = wordText.toString().trim();
-        if (word.isEmpty()) {
+        String word = wordText.toString();
+
+        // Check for empty or whitespace-only words (handles all Unicode whitespace)
+        if (word == null || word.trim().isEmpty() || word.isBlank()) {
             wordCharacters.clear();
             return;
         }
+
+        // Use trimmed version for storage
+        word = word.trim();
 
         // Step 2: Calculate bounding box by finding extremes of all character positions
         // Initialize with extreme values for comparison

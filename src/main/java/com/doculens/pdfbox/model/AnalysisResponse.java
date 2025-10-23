@@ -6,7 +6,7 @@ import java.util.ArrayList;
 
 public class AnalysisResponse {
 
-    @JsonProperty("isScanned")
+    @JsonProperty("scanned")
     private boolean isScanned;
 
     @JsonProperty("fileName")
