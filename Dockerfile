@@ -24,11 +24,10 @@ RUN apk add --no-cache fontconfig ttf-dejavu
 # Copy the built JAR from builder stage
 COPY --from=builder /app/target/*.jar app.jar
 
-# Create a non-root user and set up temp directory permissions
+# Create a non-root user and temp directory
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
-    mkdir -p /tmp && \
-    chown -R appuser:appgroup /tmp && \
-    chmod 777 /tmp
+    mkdir -p /app/temp && \
+    chown -R appuser:appgroup /app/temp
 
 USER appuser
 
@@ -39,5 +38,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/pdf/health || exit 1
 
-# Run the application
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+# Run the application with temp directory in /app
+ENTRYPOINT ["java", "-Djava.io.tmpdir=/app/temp", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
