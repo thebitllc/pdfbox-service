@@ -24,8 +24,12 @@ RUN apk add --no-cache fontconfig ttf-dejavu
 # Copy the built JAR from builder stage
 COPY --from=builder /app/target/*.jar app.jar
 
-# Create a non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create a non-root user and set up temp directory permissions
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    mkdir -p /tmp && \
+    chown -R appuser:appgroup /tmp && \
+    chmod 777 /tmp
+
 USER appuser
 
 # Expose port
